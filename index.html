@@ -330,11 +330,18 @@ h4.sec { font-size: .95rem; }
 .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
 .sugg { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
 .sugg button { flex: none; border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: 7px 12px; font-size: .84rem; color: var(--fg); }
-.chat-in { display: flex; gap: 8px; }
-.chat-in input { flex: 1; min-width: 0; min-height: 48px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface-2); padding: 0 14px; font-size: 1rem; }
-.chat-in input:focus { outline: 0; border-color: var(--blue); }
-.chat-in button { width: 48px; border: 0; border-radius: 16px; background: var(--blue); color: #061321; font-size: 1.3rem; font-weight: 700; }
-.chat-in button:disabled { opacity: .4; }
+.chat-in { display: flex; gap: 8px; align-items: flex-end; }
+.chat-in textarea { flex: 1; min-width: 0; height: 48px; min-height: 48px; max-height: 140px; resize: none; overflow-y: auto; border-radius: 16px; border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); padding: 12px 14px; font: inherit; font-size: 1rem; line-height: 1.4; }
+.chat-in textarea:focus { outline: 0; border-color: var(--blue); }
+.ci-btn { flex: none; display: grid; place-items: center; width: 48px; height: 48px; border: 0; border-radius: 16px; background: var(--blue); color: #061321; font-size: 1.3rem; font-weight: 700; }
+.ci-btn.ghost { background: var(--surface-2); border: 1px solid var(--line); color: var(--fg); }
+.ci-btn:disabled { opacity: .4; }
+.chat-in.rec { align-items: center; }
+.rec-t { flex: 1; display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 14px; border-radius: 16px; background: var(--red-soft); color: var(--red); }
+.rec-t b { font-family: var(--font-num); }
+.rec-t i { width: 10px; height: 10px; border-radius: 50%; background: var(--red); animation: recblink 1s infinite; }
+@keyframes recblink { 50% { opacity: .25; } }
+.msg.me { white-space: pre-wrap; }
 .priv { margin: 0; text-align: center; }
 .keybox { display: grid; gap: 10px; } .keybox ol, .keybox ul { margin: 0; padding-inline-start: 20px; display: grid; gap: 4px; } .keybox a { color: var(--blue); }
 
@@ -1092,7 +1099,7 @@ var Store = (function () {
       return n;
     },
     uid: uid,
-    ai: function (body) { return DEMO ? Promise.resolve({ ok: false, error: 'demo' }) : call('ai', { pin: S.pin, body: body }); },
+    ai: function (body, fast) { return DEMO ? Promise.resolve({ ok: false, error: 'demo' }) : call('ai', { pin: S.pin, body: body, fast: !!fast }); },
     aiStatus: function () { return DEMO ? Promise.resolve({ ok: true, hasKey: false, demo: true }) : call('aiStatus', { pin: S.pin }); },
     setKey: function (k) { return call('setKey', { pin: S.pin, key: k }); },
   };
@@ -2050,7 +2057,9 @@ var Demo = (function () {
   }
 
   /* =================== المستشار (شات) =================== */
-  var chat = { contents: [], log: [], busy: false, hasKey: null };
+  var chat = { contents: [], log: [], busy: false, hasKey: null, draft: '', rec: null };
+  var CAN_REC = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  var MIC = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
   var SYS = 'إنت «المستشار» جوه تطبيق «حساباتي»: مستشار مالي شخصي شاطر وصريح. اتكلم بالمصري، قصير وواضح، وبالأرقام.\n' +
     'قواعد مهمة:\n' +
     '1) استخدم الأرقام اللي في «بيانات المستخدم» تحت بس، ومتخترعش أي رقم.\n' +
@@ -2058,7 +2067,8 @@ var Demo = (function () {
     '3) العملة درهم إماراتي إلا لو الكلام عن الحساب المصري (جنيه) أو الدهب (جرام). متجمعش عملات مختلفة.\n' +
     '4) الشهور اكتبها بالعربي (مثلاً: فبراير 2027).\n' +
     '5) نصايحك مبنية على قواعد معروفة: ادفع لنفسك الأول، صندوق طوارئ، الأقساط أقل من 36% من الدخل، كرة التلج، وتجنب فايدة الكروت. متنصحش بأسهم أو استثمارات معينة.\n' +
-    '6) لو المعلومة مش موجودة في البيانات، قول كده واطلب منه يسجلها في التطبيق.';
+    '6) لو المعلومة مش موجودة في البيانات، قول كده واطلب منه يسجلها في التطبيق.\n' +
+    '7) الرسايل اللي أولها 🎤 جاية من تسجيل صوتي اتحول لكلام، فممكن يكون فيها غلطة صغيرة في كلمة: افهم المقصود.';
   var AI_TOOLS = [{ functionDeclarations: [
     { name: 'what_if_extra_payment', description: 'يحسب لو المستخدم دفع مبلغ زيادة دلوقتي على قسط أو كارت معين: الباقي وهيخلص إمتى وكام شهر هيوفر', parameters: { type: 'OBJECT', properties: { plan: { type: 'STRING', description: 'اسم القسط أو الكارت، زي Tabby أو ENBD أو FAB' }, amount: { type: 'NUMBER', description: 'المبلغ الزيادة بالدرهم' } }, required: ['plan', 'amount'] } },
     { name: 'what_if_resplit', description: 'يحسب لو المستخدم قسم الباقي من قسط على عدد شهور مختلف: القسط الشهري الجديد وهيخلص إمتى', parameters: { type: 'OBJECT', properties: { plan: { type: 'STRING' }, months: { type: 'NUMBER' } }, required: ['plan', 'months'] } },
@@ -2125,18 +2135,21 @@ var Demo = (function () {
   var SUGG = ['كل قسط هيخلص إمتى؟', 'لو دفعت 1000 زيادة على Tabby يخلص إمتى؟', 'أحوّش كام الشهر ده؟', 'أصرف كام على الأكل؟', 'لو عايز أشتري موبايل بـ 3000؟'];
   function chatHTML() {
     return '<div class="chat"><div class="msgs" id="msgs">' + (chat.log.length ? chat.log.map(function (m) {
-      return '<div class="msg ' + m.who + '">' + (m.who === 'ai' ? md(m.text) : m.who === 'err' ? '<p>' + esc(m.text) + '</p>' : esc(m.text)) + '</div>';
+      return '<div class="msg ' + m.who + '">' + (m.who === 'ai' ? md(m.text) : m.who === 'err' ? '<p>' + esc(m.text) + '</p>' : (m.voice ? '🎤 ' : '') + esc(m.text)) + '</div>';
     }).join('') : '<div class="msg ai"><p>أهلاً 👋 أنا المستشار. أنا شايف أرقامك كلها: الأقساط والكروت والادخار والمصاريف. اسألني أي حاجة.</p></div>') +
       (chat.busy ? '<div class="msg ai typing"><i></i><i></i><i></i></div>' : '') + '</div>' +
       (chat.log.length ? '' : '<div class="sugg">' + SUGG.map(function (q) { return '<button type="button" data-q="' + esc(q) + '">' + esc(q) + '</button>'; }).join('') + '</div>') +
-      '<form class="chat-in" id="chatForm"><input id="chatQ" autocomplete="off" placeholder="اسأل أي حاجة عن فلوسك…"' + (chat.busy ? ' disabled' : '') + '><button type="submit" aria-label="إرسال"' + (chat.busy ? ' disabled' : '') + '>↑</button></form>' +
-      '<p class="muted small priv">بيتبعت لـ Google Gemini: الأرقام وأسماء الكروت والأقساط بس. ' + (chat.log.length ? '<button class="link" data-act="chat-clear">محادثة جديدة</button>' : '') + '</p></div>';
+      (chat.rec ? '<div class="chat-in rec" id="recBar"><button type="button" class="ci-btn ghost" data-act="rec-cancel" aria-label="إلغاء">✕</button><div class="rec-t"><i></i><b id="recTime">0:00</b> بيسجّل…</div><button type="button" class="ci-btn" data-act="rec-send" aria-label="إرسال">↑</button></div>'
+        : '<form class="chat-in" id="chatForm"><textarea id="chatQ" rows="1" enterkeyhint="enter" autocomplete="off" placeholder="اسأل أي حاجة عن فلوسك…"' + (chat.busy ? ' disabled' : '') + '>' + esc(chat.draft) + '</textarea>' +
+          (CAN_REC ? '<button type="button" class="ci-btn ghost" data-act="rec-start" aria-label="رسالة صوتية"' + (chat.busy ? ' disabled' : '') + '>' + MIC + '</button>' : '') +
+          '<button type="submit" class="ci-btn" aria-label="إرسال"' + (chat.busy ? ' disabled' : '') + '>↑</button></form>') +
+      '<p class="muted small priv">بيتبعت لـ Google Gemini: الأرقام وأسماء الكروت والأقساط والرسايل الصوتية بس. ' + (chat.log.length ? '<button class="link" data-act="chat-clear">محادثة جديدة</button>' : '') + '</p></div>';
   }
   function keyHTML(msg) {
     return '<div class="keybox"><p><b>المستشار بيشتغل بـ Google Gemini (مجاني).</b> محتاج تربطه مرة واحدة:</p><ol>' +
       '<li>افتح <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> وادخل بأي أكونت جوجل.</li>' +
-      '<li>دوس <b>Create API key</b> وانسخ المفتاح (بيبدأ بـ AIza).</li><li>الصقه هنا ودوس حفظ.</li></ol>' +
-      '<div class="field"><input id="aiKey" dir="ltr" placeholder="AIza..." autocomplete="off"></div><p class="err" id="keyErr">' + esc(msg || '') + '</p>' +
+      '<li>دوس <b>Create API key</b> وانسخ المفتاح.</li><li>الصقه هنا ودوس حفظ.</li></ol>' +
+      '<div class="field"><input id="aiKey" dir="ltr" placeholder="الصق المفتاح هنا" autocomplete="off"></div><p class="err" id="keyErr">' + esc(msg || '') + '</p>' +
       '<button class="btn" data-act="save-key">حفظ</button>' +
       '<p class="muted small">المفتاح بيتحفظ على السيرفر بتاعك بس (Apps Script)، ومش بيتخزن على الموبايل ولا على GitHub.</p></div>';
   }
@@ -2153,23 +2166,85 @@ var Demo = (function () {
   function drawChat() {
     openSheet('المستشار', chatHTML(), function (body) {
       body.classList.add('chat-body');
-      $('#chatForm', body).addEventListener('submit', function (e) { e.preventDefault(); var q = $('#chatQ').value.trim(); if (q) askAI(q); });
+      var form = $('#chatForm', body), ta = $('#chatQ', body);
+      if (form) {
+        var grow = function () { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight + 2, 140) + 'px'; };
+        form.addEventListener('submit', function (e) { e.preventDefault(); var q = ta.value.trim(); if (q) { chat.draft = ''; askAI(q); } });
+        ta.addEventListener('input', function () { chat.draft = ta.value; grow(); });
+        // Enter = سطر جديد؛ الإرسال بالزرار (أو Cmd/Ctrl+Enter من الكيبورد)
+        ta.addEventListener('keydown', function (e) { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit')); } });
+        if (chat.draft) grow();
+      }
       $$('[data-q]', body).forEach(function (b) { b.addEventListener('click', function () { askAI(b.dataset.q); }); });
       var m = $('#msgs', body); m.scrollTop = m.scrollHeight;
-      if (!chat.busy) setTimeout(function () { var i = $('#chatQ'); if (i) i.focus(); }, 50);
+      if (!chat.busy && !chat.rec && !('ontouchstart' in window)) setTimeout(function () { var i = $('#chatQ'); if (i) i.focus(); }, 50);
     });
   }
   function saveKey() {
     var k = ($('#aiKey') || {}).value || '';
-    if (!/^[\w-]{20,}$/.test(k.trim())) { $('#keyErr').textContent = 'المفتاح ده مش شكله صح.'; return; }
+    if (!/^[\w.-]{20,}$/.test(k.trim())) { $('#keyErr').textContent = 'المفتاح ده مش شكله صح.'; return; }
     Store.setKey(k.trim()).then(function (r) {
       if (!r || !r.ok) { $('#keyErr').textContent = 'متحفظش. جرب تاني.'; return; }
       chat.hasKey = true; toast('اتربط المستشار ✓'); drawChat();
     }).catch(function () { $('#keyErr').textContent = 'مفيش اتصال.'; });
   }
-  function askAI(q) {
+  /* رسالة صوتية: بتتسجل على الموبايل وبتتبعت لـ Gemini يسمعها ويرد */
+  function mmss(s) { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ':' + ('0' + s % 60).slice(-2); }
+  function recStart() {
+    if (chat.busy || chat.rec) return;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      var type = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg;codecs=opus'].filter(function (t) { return MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t); })[0];
+      var rec = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 32000 } : undefined);
+      var r = { rec: rec, stream: stream, chunks: [], t0: performance.now(), send: false };
+      rec.ondataavailable = function (e) { if (e.data && e.data.size) r.chunks.push(e.data); };
+      rec.onstop = function () { stream.getTracks().forEach(function (t) { t.stop(); }); if (r.send) recSend(r); };
+      rec.start(1000);
+      r.timer = setInterval(function () {
+        var s = (performance.now() - r.t0) / 1000, el = $('#recTime');
+        if (!el) { recStop(false); return; } // الشات اتقفل
+        el.textContent = mmss(s);
+        if (s >= 60) recStop(true);
+      }, 250);
+      chat.rec = r; drawChat();
+    }).catch(function () { toast('اسمح للتطبيق يستخدم المايك وجرب تاني'); });
+  }
+  function recStop(send) {
+    var r = chat.rec; if (!r) return;
+    chat.rec = null; clearInterval(r.timer);
+    r.secs = (performance.now() - r.t0) / 1000;
+    r.send = send && r.secs >= 1;
+    if (send && !r.send) toast('التسجيل قصير أوي');
+    try { r.rec.stop(); } catch (e) { r.stream.getTracks().forEach(function (t) { t.stop(); }); }
+    if ($('#recBar')) drawChat();
+  }
+  function recSend(r) {
     if (chat.busy) return;
-    chat.log.push({ who: 'me', text: q });
+    var blob = new Blob(r.chunks, { type: r.rec.mimeType || 'audio/mp4' });
+    var me = { who: 'me', voice: true, text: 'رسالة صوتية · ' + mmss(r.secs) };
+    chat.log.push(me); chat.busy = true; drawChat();
+    var fr = new FileReader();
+    fr.onload = function () {
+      // خطوة 1: الصوت يتحول لكلام مكتوب (موديل سريع). خطوة 2: الكلام ده يتسأل للمستشار كأنه مكتوب
+      var body = { contents: [{ role: 'user', parts: [{ inlineData: { mimeType: (blob.type || 'audio/mp4').split(';')[0], data: String(fr.result).split(',')[1] } },
+        { text: 'اكتب الكلام اللي في التسجيل ده بالحرف زي ما اتقال (غالباً بالمصري، وممكن فيه كلام إنجليزي زي Tabby أو ENBD)، والأرقام بالأرقام. اكتب الكلام بس من غير أي حاجة تانية. لو مفيش كلام مفهوم اكتب: ؟' }] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 1024 } };
+      Store.ai(body, true).then(function (res) {
+        if (!res || !res.ok) throw new Error((res && res.error) || 'ai_error');
+        var t = ((res.content && res.content.parts) || []).filter(function (x) { return x.text && !x.thought; }).map(function (x) { return x.text; }).join(' ').replace(/^[«"\s]+|[»"\s]+$/g, '');
+        if (!t || /^[؟?.\s]*$/.test(t)) throw new Error('unclear');
+        me.text = t; chat.busy = false; askAI('🎤 ' + t, me);
+      }).catch(function (e) { chat.busy = false; aiFail(e.message); if (!$('#sheet').hidden && $('#chatForm')) drawChat(); });
+    };
+    fr.readAsDataURL(blob);
+  }
+  function aiFail(m) {
+    if (m === 'no_key' || m === 'bad_key') { chat.hasKey = false; openSheet('المستشار', keyHTML(m === 'bad_key' ? 'المفتاح مش شغال. اعمل واحد جديد.' : '')); return; }
+    chat.log.push({ who: 'err', text: m === 'ai_busy' ? 'المستشار عليه ضغط دلوقتي (الحد المجاني). جرب كمان دقيقة.' : m === 'too_big' ? 'الرسالة الصوتية طويلة. سجّل أقصر.' : m === 'unclear' ? 'مش سامع كويس. جرب تسجّل تاني.' : 'حصلت مشكلة في الاتصال بالمستشار. جرب تاني.' });
+  }
+  function askAI(q, me) {
+    if (chat.busy) return;
+    var start = chat.contents.length;
+    if (!me) chat.log.push({ who: 'me', text: q });
     chat.contents.push({ role: 'user', parts: [{ text: q }] });
     chat.busy = true; drawChat();
     var rounds = 0;
@@ -2182,7 +2257,7 @@ var Demo = (function () {
         chat.contents.push(c);
         var calls = c.parts.filter(function (x) { return x.functionCall; });
         if (calls.length && rounds++ < 4) {
-          chat.contents.push({ role: 'user', parts: calls.map(function (x) { return { functionResponse: { name: x.functionCall.name, response: { result: runTool(x.functionCall) } } }; }) });
+          chat.contents.push({ role: 'user', parts: calls.map(function (x) { return { functionResponse: { id: x.functionCall.id, name: x.functionCall.name, response: { result: runTool(x.functionCall) } } }; }) });
           return step();
         }
         var text = c.parts.filter(function (x) { return x.text && !x.thought; }).map(function (x) { return x.text; }).join('\n').trim();
@@ -2190,10 +2265,8 @@ var Demo = (function () {
       });
     };
     step().catch(function (e) {
-      chat.contents.pop();
-      var m = e.message;
-      if (m === 'no_key' || m === 'bad_key') { chat.hasKey = false; chat.busy = false; openSheet('المستشار', keyHTML(m === 'bad_key' ? 'المفتاح مش شغال. اعمل واحد جديد.' : '')); return; }
-      chat.log.push({ who: 'err', text: m === 'ai_busy' ? 'المستشار عليه ضغط دلوقتي (الحد المجاني). جرب كمان دقيقة.' : 'حصلت مشكلة في الاتصال بالمستشار. جرب تاني.' });
+      chat.contents.length = start;
+      chat.busy = false; aiFail(e.message);
     }).then(function () { chat.busy = false; if (!$('#sheet').hidden && $('#chatForm')) drawChat(); });
   }
 
@@ -2219,6 +2292,9 @@ var Demo = (function () {
       case 'buy': buyForm(); break;
       case 'chat': openChat(); break;
       case 'save-key': saveKey(); break;
+      case 'rec-start': recStart(); break;
+      case 'rec-cancel': recStop(false); break;
+      case 'rec-send': recStop(true); break;
       case 'ai-settings': chat.hasKey = null; openChat(true); break;
       case 'chat-clear': chat.contents = []; chat.log = []; openChat(); break;
       case 'apply-sugg': Fin.advise(db(), today()).cats.forEach(function (c) { if (!c.budget && c.suggest > 0) Store.upsert('categories', Object.assign({}, db().categories[c.id], { budget: c.suggest })); }); toast('اتحفظت كخطتك ✓ تقدر تغيّر أي بند'); render(); break;
