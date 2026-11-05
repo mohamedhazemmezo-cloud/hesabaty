@@ -1380,7 +1380,7 @@ var Demo = (function () {
 
   /* =================== الرئيسية =================== */
   function homeTab() {
-    var T = today(), D = Fin.debts(db(), T), S = Fin.savings(db()), M = Fin.month(db(), T.slice(0, 7), 'AED');
+    var T = today(), D = Fin.debts(db(), T), S = Fin.savings(db()), L2 = Fin.liquid(db()), M = Fin.month(db(), T.slice(0, 7), 'AED');
     var ag = Fin.agenda(db(), T, 31), ins = Fin.insights(db(), T, 'AED', isEn() ? 'en' : 'ar');
     var s = D.sum, remPct = s.total > 0 ? s.remaining / s.total * 100 : 0;
     var out = '<section class="card hero">' +
@@ -1397,8 +1397,9 @@ var Demo = (function () {
     out += '<section class="tiles">' +
       tile(txt('درهم'), S.AED, 'AED', 'green') + tile(txt('جنيه'), S.EGP, 'EGP', 'green') + tile(txt('دهب'), S.GOLD, 'GOLD', 'gold') + '</section>';
     var mp = M.income > 0 ? Math.round(M.spent / M.income * 100) : 0;
+    var avail = Fin.round2(L2.AED - S.AED);
     out += '<section class="card"><div class="row-head"><h3>' + monthName(new Date().getMonth()) + '</h3><button class="link" data-go="spend">' + txt('التفاصيل') + ' ‹</button></div>' +
-      '<div class="trio"><div><span>' + txt('دخل') + '</span>' + amt(M.income, 'AED', 'green') + '</div><div><span>' + txt('صرفت') + '</span>' + amt(M.spent, 'AED', 'red') + '</div><div><span>' + txt('فاضل') + '</span>' + amt(M.saved, 'AED', M.saved < 0 ? 'red' : '') + '</div></div>' +
+      '<div class="trio"><div><span>' + txt('دخل') + '</span>' + amt(M.income, 'AED', 'green') + '</div><div><span>' + txt('صرفت') + '</span>' + amt(M.spent, 'AED', 'red') + '</div><div><span>' + (isEn() ? 'Available' : 'المتاح للصرف') + '</span>' + amt(avail, 'AED', avail < 0 ? 'red' : '') + '</div></div>' +
       (M.income > 0 ? bar(mp, mp >= 90 ? 'var(--red)' : mp >= 70 ? 'var(--amber)' : 'var(--blue)') + '<p class="muted small">' + (isEn() ? 'Spent ' + mp + '% of this month\'s income' : 'صرفت ' + mp + '% من دخل الشهر') + '</p>' : '') + '</section>';
     out += '<section class="card"><div class="row-head"><h3>' + txt('المواعيد الجاية') + '</h3><span class="muted small">' + (isEn() ? 'Within 31 days' : 'خلال 31 يوم') + '</span></div>' +
       (ag.length ? '<ul class="agenda">' + (ui.agAll ? ag : ag.slice(0, 6)).map(agRow).join('') + '</ul>' +
@@ -1427,7 +1428,7 @@ var Demo = (function () {
     if (isNow || ui.month > today().slice(0, 7)) out += advisorHTML();
     out += '<div class="monthnav"><button data-act="mprev" aria-label="' + (isEn() ? 'Last month' : 'الشهر اللي فات') + '">›</button><b>' + mLabel(ui.month) + '</b><button data-act="mnext" aria-label="' + (isEn() ? 'Next month' : 'الشهر الجاي') + '"' + (isNow ? ' disabled' : '') + '>‹</button></div>';
     if (hasEGP) out += '<div class="seg"><button data-cur="AED" aria-pressed="' + (ui.cur === 'AED') + '">' + txt('درهم') + '</button><button data-cur="EGP" aria-pressed="' + (ui.cur === 'EGP') + '">' + txt('جنيه') + '</button></div>';
-    out += '<section class="card"><div class="trio"><div><span>' + txt('دخل') + '</span>' + amt(M.income, ui.cur, 'green') + '</div><div><span>' + txt('صرفت') + '</span>' + amt(M.spent, ui.cur, 'red') + '</div><div><span>' + txt('فاضل') + '</span>' + amt(M.saved, ui.cur, M.saved < 0 ? 'red' : '') + '</div></div></section>';
+    out += '<section class="card"><div class="trio"><div><span>' + txt('دخل') + '</span>' + amt(M.income, ui.cur, 'green') + '</div><div><span>' + txt('صرفت') + '</span>' + amt(M.spent, ui.cur, 'red') + '</div><div><span>' + txt('فاضل') + '</span>' + amt(Math.round(M.income) - Math.round(M.spent), ui.cur, M.saved < 0 ? 'red' : '') + '</div></div></section>';
     if (M.spent > 0) {
       out += '<section class="card"><h3>' + (isEn() ? 'Where your money went' : 'فلوسك راحت فين') + '</h3><div class="donut-wrap">' + donut(M) + '<ul class="legend">' + M.cats.map(function (c) {
         var pv = P.byCat[c.id] || 0, diff = pv ? Math.round((c.amount / pv - 1) * 100) : null;
